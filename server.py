@@ -18,7 +18,6 @@ class Server:
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     inputs = [s]
     outputs = []
-    topic_dictionary = {}
 
     def __init__(self):
         print('binding to address: %s port: %s' % self.address)
@@ -70,8 +69,7 @@ class Server:
                     content_type = "Content Type:text/html\r\n\r\n"
 
                     # craft and send header response
-                    http_response = "HTTP/1.1 " + request_success + content_type
-                    http_response += html_file_content
+                    http_response = "HTTP/1.1 " + request_success + content_type + html_file_content
                     client_socket.send(http_response.encode())
 
                     # close connection
@@ -85,19 +83,21 @@ class Server:
         if data:
             data = data.decode('utf-8')
             http_as_list = data.split("\n")
+            header = http_as_list[0].split(" ")
+            ending_crlfs = http_as_list[(len(http_as_list) - 2):]
 
-            if len(http_as_list[0].split(" ")) == 3:
+            if (len(header) == 3) & (header[0] == "GET") & (ending_crlfs == ['\r', '']):
                 uri = "static" + (http_as_list[0].split(" "))[1]
 
             else:
                 uri = None
 
+            # Debugging
+            # print("---------------------------------------\n")
+            # print("URI", uri)
+
         else:
             uri = None
-
-        # DEBUGGING
-        print(http_as_list, "\n")
-        print("URI", uri)
 
         return uri
 
