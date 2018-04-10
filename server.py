@@ -84,9 +84,9 @@ class Server:
             data = data.decode('utf-8')
             http_as_list = data.split("\n")
             header = http_as_list[0].split(" ")
-            ending_crlfs = http_as_list[(len(http_as_list) - 2):]
+            ending_crlfs = data[-4:]
 
-            if (len(header) == 3) & (header[0] == "GET") & (ending_crlfs == ['\r', '']):
+            if (len(header) == 3) & (header[0] == "GET") & (ending_crlfs == "\r\n\r\n"):
                 uri = "static" + (http_as_list[0].split(" "))[1]
 
             else:
