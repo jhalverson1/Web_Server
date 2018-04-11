@@ -45,32 +45,60 @@ class Server:
                 # connection has data for us
                 else:
                     uri = self.process_http_header(current_read)
+                    content_type = "Content Type:text/html\r\n\r\n"
 
                     # if uri is not None, else 400 Bad Request
                     if uri is not None:
 
                         # send contents of file, if file not found, send 404 error
                         try:
-                            html_file = open(uri)
-                            html_file_content = html_file.read()
-                            html_file.close()
-                            request_success = "200 OK\r\n"
+                            print("uri", uri)
+
+                            if uri[-3:] == "jpg":
+                                file = open(uri, 'rb')
+                                file_content = file.read()
+                                file.close()
+                                request_success = "200 OK\r\n"
+                                content_type = "Content Type:image/jpeg\r\n\r\n"
+
+                            elif uri[-3:] == "png":
+                                file = open(uri, 'rb')
+                                file_content = file.read()
+                                file.close()
+                                request_success = "200 OK\r\n"
+                                content_type = "Content Type:image/png\r\n\r\n"
+
+                            else:
+                                file = open(uri)
+                                file_content = file.read()
+                                file.close()
+                                request_success = "200 OK\r\n"
+                                content_type = "Content Type:text/html\r\n\r\n"
 
                         except:
-                            print(uri, "not found")
-                            html_file_content = "<html><body><p>Error 404: File not found</p></body></html>"
+                            file_content = "<html><body><p>Error 404: File not found</p></body></html>"
                             request_success = "404 Not Found\r\n"
 
                     else:
-                        print("Bad Request")
-                        html_file_content = "<html><body><p>Error 400: Bad Request</p></body></html>"
+                        file_content = "<html><body><p>Error 400: Bad Request</p></body></html>"
                         request_success = "400 Bad Request\r\n"
 
-                    content_type = "Content Type:text/html\r\n\r\n"
-
                     # craft and send header response
-                    http_response = "HTTP/1.1 " + request_success + content_type + html_file_content
-                    client_socket.send(http_response.encode())
+
+                    if uri[-3:] == "jpg":
+                        http_response = "HTTP/1.1 " + request_success + content_type
+                        client_socket.send(http_response.encode())
+                        client_socket.send(file_content)
+
+                    elif uri[-3:] == "png":
+                        http_response = "HTTP/1.1 " + request_success + content_type
+                        client_socket.send(http_response.encode())
+                        client_socket.send(file_content)
+
+                    else:
+                        http_response = "HTTP/1.1 " + request_success + content_type + file_content
+                        client_socket.send(http_response.encode('utf-8'))
+
 
                     # close connection
                     self.inputs.remove(current_read)
@@ -82,19 +110,16 @@ class Server:
 
         if data:
             data = data.decode('utf-8')
+            print(data)
             http_as_list = data.split("\n")
             header = http_as_list[0].split(" ")
             ending_crlfs = data[-4:]
 
-            if (len(header) == 3) & (header[0] == "GET") & (ending_crlfs == "\r\n\r\n"):
+            if (len(header) == 3) & (header[0] == "GET") & (ending_crlfs == "\r\n\r\n") & (header[2] == "HTTP/1.1\r"):
                 uri = "static" + (http_as_list[0].split(" "))[1]
 
             else:
                 uri = None
-
-            # Debugging
-            # print("---------------------------------------\n")
-            # print("URI", uri)
 
         else:
             uri = None
