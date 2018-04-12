@@ -17,7 +17,6 @@ class Server:
     address = (ip_address, int(port))
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     inputs = [s]
-    outputs = []
 
     def __init__(self):
         print('binding to address: %s port: %s' % self.address)
@@ -31,7 +30,7 @@ class Server:
         while True:
 
             # Wait for something to happen
-            readable, writable, exceptional = select.select(self.inputs, self.outputs, self.inputs)
+            readable, writable, exceptional = select.select(self.inputs, [], [])
 
             # loop through list of readable objects
             for current_read in readable:
@@ -44,82 +43,81 @@ class Server:
 
                 # connection has data for us
                 else:
-                    uri = self.process_http_header(current_read)
-                    content_type = "Content Type:text/html\r\n\r\n"
+                    data = current_read.recv(4096)
+                    data = data.decode('utf-8')
 
-                    # if uri is not None, else 400 Bad Request
-                    if uri is not None:
+                    if data:
+                        uri = self.process_http_header(data)
+                        content_type = "Content Type:text/html\r\n\r\n"
 
-                        # send contents of file, if file not found, send 404 error
-                        try:
-                            print("uri", uri)
+                        # if uri is not None, else 400 Bad Request
+                        if uri is not None:
 
-                            if uri[-3:] == "jpg":
-                                file = open(uri, 'rb')
-                                file_content = file.read()
-                                file.close()
-                                request_success = "200 OK\r\n"
-                                content_type = "Content Type:image/jpeg\r\n\r\n"
+                            # send contents of file, if file not found, send 404 error
+                            try:
 
-                            elif uri[-3:] == "png":
-                                file = open(uri, 'rb')
-                                file_content = file.read()
-                                file.close()
-                                request_success = "200 OK\r\n"
-                                content_type = "Content Type:image/png\r\n\r\n"
+                                if uri[-3:] == "jpg":
+                                    file = open(uri, 'rb')
+                                    file_content = file.read()
+                                    file.close()
+                                    request_success = "200 OK\r\n"
+                                    content_type = "Content Type:image/jpeg\r\n\r\n"
 
-                            else:
-                                file = open(uri)
-                                file_content = file.read()
-                                file.close()
-                                request_success = "200 OK\r\n"
-                                content_type = "Content Type:text/html\r\n\r\n"
+                                elif uri[-3:] == "png":
+                                    file = open(uri, 'rb')
+                                    file_content = file.read()
+                                    file.close()
+                                    request_success = "200 OK\r\n"
+                                    content_type = "Content Type:image/png\r\n\r\n"
 
-                        except:
-                            file_content = "<html><body><p>Error 404: File not found</p></body></html>"
-                            request_success = "404 Not Found\r\n"
+                                else:
+                                    file = open(uri)
+                                    file_content = file.read()
+                                    file.close()
+                                    request_success = "200 OK\r\n"
+                                    content_type = "Content Type:text/html\r\n\r\n"
+
+                            except:
+                                file_content = "<html><body><p>Error 404: File not found</p></body></html>"
+                                request_success = "404 Not Found\r\n"
+
+                        else:
+                            file_content = "<html><body><p>Error 400: Bad Request</p></body></html>"
+                            request_success = "400 Bad Request\r\n"
+
+                        # craft and send header response
+
+                        if uri[-3:] == "jpg":
+                            http_response = "HTTP/1.1 " + request_success + content_type
+                            client_socket.send(http_response.encode())
+                            client_socket.send(file_content)
+
+                        elif uri[-3:] == "png":
+                            http_response = "HTTP/1.1 " + request_success + content_type
+                            client_socket.send(http_response.encode())
+                            client_socket.send(file_content)
+
+                        else:
+                            http_response = "HTTP/1.1 " + request_success + content_type + file_content
+                            client_socket.send(http_response.encode('utf-8'))
+
+                        self.inputs.remove(current_read)
+                        current_read.close()
 
                     else:
-                        file_content = "<html><body><p>Error 400: Bad Request</p></body></html>"
-                        request_success = "400 Bad Request\r\n"
-
-                    # craft and send header response
-
-                    if uri[-3:] == "jpg":
-                        http_response = "HTTP/1.1 " + request_success + content_type
-                        client_socket.send(http_response.encode())
-                        client_socket.send(file_content)
-
-                    elif uri[-3:] == "png":
-                        http_response = "HTTP/1.1 " + request_success + content_type
-                        client_socket.send(http_response.encode())
-                        client_socket.send(file_content)
-
-                    else:
-                        http_response = "HTTP/1.1 " + request_success + content_type + file_content
-                        client_socket.send(http_response.encode('utf-8'))
-
-
-                    # close connection
-                    self.inputs.remove(current_read)
-                    current_read.close()
+                        # close connection
+                        self.inputs.remove(current_read)
+                        current_read.close()
 
     # Find the URI
-    def process_http_header(self, socket):
-        data = socket.recv(4096)
+    def process_http_header(self, data):
 
-        if data:
-            data = data.decode('utf-8')
-            print(data)
-            http_as_list = data.split("\n")
-            header = http_as_list[0].split(" ")
-            ending_crlfs = data[-4:]
+        http_as_list = data.split("\r\n")
+        header = http_as_list[0].split(" ")
+        ending_crlfs = data[-4:]
 
-            if (len(header) == 3) & (header[0] == "GET") & (ending_crlfs == "\r\n\r\n") & (header[2] == "HTTP/1.1\r"):
-                uri = "static" + (http_as_list[0].split(" "))[1]
-
-            else:
-                uri = None
+        if (len(header) == 3) & (header[0] == "GET") & (ending_crlfs == "\r\n\r\n") & (header[2] == "HTTP/1.1"):
+            uri = "static" + (http_as_list[0].split(" "))[1]
 
         else:
             uri = None
